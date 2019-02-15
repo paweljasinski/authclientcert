@@ -38,7 +38,7 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         global $USERINFO;
         $sticky ? $sticky = true : $sticky = false; //sanity check
 
-        error_log("trustExternal of authremoteuser\n", 3, "/tmp/plugin.log");
+        // error_log("trustExternal of authremoteuser\n", 3, "/tmp/plugin.log");
         $header_name = $this->getConf('http_header_name');
         if (empty($header_name)) {
 			$this->_debug("CLIENT CERT: http_header_name is empty", 0, __LINE__, __FILE__);
@@ -51,7 +51,6 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         }
         $certUserInfo = $this->_extractUserInfoFromCert($cert);
         if (empty($certUserInfo)) {
-            error_log("_extractUserInfoFromCert failed\n", 3, "/tmp/plugin.log");
             return false;
         }
         $remoteUser = $certUserInfo['user'];
@@ -75,7 +74,11 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
             // modify user?
             return $userInfo;
         }
-        if ($this->createUser($user, auth_pwgen(), $certUserInfo['name'], $certUserInfo['mail'], array("smartcarduser"))) {
+        $group = $this->getConf('group');
+        if (empty($group)) {
+            $group = "user";
+        }
+        if ($this->createUser($user, auth_pwgen(), $certUserInfo['name'], $certUserInfo['mail'], array($group))) {
             return $this->users[$user];
         }
         $this->_debug("CLIENT CERT: Unable to autocreate user", 0, __LINE__, __FILE__);
@@ -106,7 +109,6 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
             return false;
         }
 
-        // error_log($client_cert_data['subject'], 3, "/tmp/plugin.log");
         // this could be anything like: givenName sn, sn givenName, uid, ...
         // [subject] => Array ( [C] => CH [O] => Admin [OU] => Array ( [0] => VBS [1] => V ) [UNDEF] => E1024143 [CN] => Pawel Jasinski )
         $name = $client_cert_data['subject']['CN'];

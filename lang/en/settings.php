@@ -7,5 +7,6 @@
 $lang['plugin_settings_name'] = 'Client certificate auth plugin';
 
 $lang['http_header_name'] = 'Name of the http header containing base64 encoded client certificate';
+$lang['group'] = 'Group name used when creating a new user';
 $lang['debug'] = 'Display diagnostic information';
 

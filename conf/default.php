@@ -6,5 +6,6 @@
  */
 
 $conf['http_header_name'] = 'HTTP_X_SSL_CLIENTCERT_BASE64';
+$conf['group'] = 'smartcarduser';
 $conf['debug'] = 0;
 

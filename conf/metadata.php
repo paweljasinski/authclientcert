@@ -7,5 +7,6 @@
 
 
 $meta['http_header_name'] = array('string');
+$meta['group'] = array('string');
 $meta['debug'] = array('onoff','_caution' => 'security');
 
