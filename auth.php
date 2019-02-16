@@ -17,10 +17,17 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
     /**
      * Constructor.
      */
-    public function __construct()
-    {
+    public function __construct() {
         parent::__construct(); // for compatibility
-        $this->cando['external']    = true; // does the module do external auth checking?
+        $this->cando['addUser']     = false; // can Users be created?
+        $this->cando['delUser']     = false; // can Users be deleted?
+        $this->cando['modLogin']    = false; // can login names be changed?
+        $this->cando['modPass']     = false; // can passwords be changed?
+        $this->cando['modName']     = false; // can real names be changed?
+        $this->cando['modMail']     = false; // can emails be changed?
+        $this->cando['modGroups']   = true;  // can groups be changed?
+        $this->cando['getGroups']   = true;  // can a list of available groups be retrieved?
+        $this->cando['external']    = true;  // does the module do external auth checking?
         $this->cando['logout']      = false; // not possible as long as certificate is provided
     }
 
@@ -41,15 +48,16 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         // error_log("trustExternal of authremoteuser\n", 3, "/tmp/plugin.log");
         $header_name = $this->getConf('http_header_name');
         if (empty($header_name)) {
-			$this->_debug("CLIENT CERT: http_header_name is empty", 0, __LINE__, __FILE__);
+            $this->_debug("CLIENT CERT: http_header_name is empty", 0, __LINE__, __FILE__);
             return false;
         }
         $cert = $_SERVER[$header_name];
         if (empty($cert)) {
-			$this->_debug("CLIENT CERT: missing http header ($header_name)", 0, __LINE__, __FILE__);
+            $this->_debug("CLIENT CERT: missing http header ($header_name)", 0, __LINE__, __FILE__);
             return false;
         }
         $certUserInfo = $this->_extractUserInfoFromCert($cert);
+        msg(print_r($certUserInfo, true));
         if (empty($certUserInfo)) {
             return false;
         }
@@ -57,7 +65,7 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         $userinfo = $this->_upsertUser($certUserInfo);
         if(empty($userinfo)) {
             return false;
-		}
+        }
         $_SERVER['REMOTE_USER'] = $remoteUser;
         $USERINFO['name'] = $_SESSION[DOKU_COOKIE]['auth']['info']['name'] = $userinfo['name'];
         $USERINFO['mail'] = $_SESSION[DOKU_COOKIE]['auth']['info']['mail'] = $userinfo['mail'];
@@ -78,7 +86,8 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         if (empty($group)) {
             $group = "user";
         }
-        if ($this->createUser($user, auth_pwgen(), $certUserInfo['name'], $certUserInfo['mail'], array($group))) {
+        $group = $this->cleanGroup($group);
+        if ($this->createUser($user, auth_pwgen().auth_pwgen(), $certUserInfo['name'], $certUserInfo['mail'], array($group))) {
             return $this->users[$user];
         }
         $this->_debug("CLIENT CERT: Unable to autocreate user", 0, __LINE__, __FILE__);
@@ -99,13 +108,13 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
     protected function _extractUserInfoFromCert($cert) {
         $cert = $this->_formatCert($cert);
         if (empty($cert)) {
-			$this->_debug("CLIENT CERT: unable to locate user certificate", 0, __LINE__, __FILE__);
+            $this->_debug("CLIENT CERT: unable to locate user certificate", 0, __LINE__, __FILE__);
             return false;
         }
         $_SESSION['SSL_CLIENT_CERT'] = $cert;
         $client_cert_data = openssl_x509_parse($cert);
-		if (empty($client_cert_data)) {
-			$this->_debug("CLIENT CERT: unable to parse user certificate $client_cert_data", 0, __LINE__, __FILE__);
+        if (empty($client_cert_data)) {
+            $this->_debug("CLIENT CERT: unable to parse user certificate $client_cert_data", 0, __LINE__, __FILE__);
             return false;
         }
 
@@ -113,7 +122,7 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         // [subject] => Array ( [C] => CH [O] => Admin [OU] => Array ( [0] => VBS [1] => V ) [UNDEF] => E1024143 [CN] => Pawel Jasinski )
         $name = $client_cert_data['subject']['CN'];
         if (empty($name)) {
-			$this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing subject.CN", 0, __LINE__, __FILE__);
+            $this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing subject.CN", 0, __LINE__, __FILE__);
             return false;
         }
 
@@ -122,7 +131,7 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         $cert_name = $client_cert_data['name'];
         $employee_number = $this->_getOID("2.16.840.1.113730.3.1.3", $cert_name);
         if (empty($employee_number)) {
-			$this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing user name (employee number)", 0, __LINE__, __FILE__);
+            $this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing user name (employee number)", 0, __LINE__, __FILE__);
             return false;
         }
         // go after email address in extension.subjectAltName
@@ -137,20 +146,17 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
             }
         }
         if (empty($mail)) {
-			$this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing email address", 0, __LINE__, __FILE__);
+            $this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing email address", 0, __LINE__, __FILE__);
             return false;
         }
-        return ['name' => $name, 'mail' => $mail, 'user' => $employee_number ];
+        $user = $this->cleanUser($employee_number);
+        return ['name' => $name, 'mail' => $mail, 'user' => $user ];
     }
 
     private function _getOID($OID, $name) {
         preg_match('/\/' . $OID  . '=([^\/]+)/', $name, $matches);
         return $matches[1];
     }
-
-// private function _getExtensionPa
-
-
 
     /**
      * Wrapper around msg() but outputs only when debug is enabled
@@ -166,11 +172,9 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         msg($message, $err, $line, $file);
     }
 
-	protected function _debugCert($client_cert_data, $message, $err, $line, $file) {
-		$cert_dump = print_r($client_cert_data, true);
+    protected function _debugCert($client_cert_data, $message, $err, $line, $file) {
+        $cert_dump = print_r($client_cert_data, true);
         $this->_debug($message." ".$client_cert_data.$cert_dump, $err, $line, $file);
-	}
-
-
+    }
 }
 
