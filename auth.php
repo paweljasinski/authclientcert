@@ -37,6 +37,7 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         if ($ret) {
             $this->cando['logout'] = true;
         }
+        return $ret;
     }
 
     /**
