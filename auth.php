@@ -15,12 +15,12 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
 {
 
     /**
-     * Constructor.
+     * Constructor
      */
     public function __construct() {
         parent::__construct(); // for compatibility
         $this->cando['addUser']     = false; // can Users be created?
-        $this->cando['delUser']     = false; // can Users be deleted?
+        $this->cando['delUser']     = true;  // can Users be deleted?
         $this->cando['modLogin']    = false; // can login names be changed?
         $this->cando['modPass']     = false; // can passwords be changed?
         $this->cando['modName']     = false; // can real names be changed?
@@ -31,6 +31,13 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         $this->cando['logout']      = false; // not possible as long as certificate is provided
     }
 
+    public function checkPass($user, $pass) {
+        $ret = parent::checkPass($user, $pass);
+        // password based logon can logout
+        if ($ret) {
+            $this->cando['logout'] = true;
+        }
+    }
 
     /**
      * Do all authentication [ OPTIONAL ]
