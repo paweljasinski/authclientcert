@@ -28,16 +28,7 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         $this->cando['modGroups']   = true;  // can groups be changed?
         $this->cando['getGroups']   = true;  // can a list of available groups be retrieved?
         $this->cando['external']    = true;  // does the module do external auth checking?
-        $this->cando['logout']      = false; // not possible as long as certificate is provided
-    }
-
-    public function checkPass($user, $pass) {
-        $ret = parent::checkPass($user, $pass);
-        // password based logon can logout
-        if ($ret) {
-            $this->cando['logout'] = true;
-        }
-        return $ret;
+        $this->cando['logout']      = true;  // possible for user logged in with password
     }
 
     /**
@@ -80,6 +71,7 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         $USERINFO['grps'] = $_SESSION[DOKU_COOKIE]['auth']['info']['grps'] = $userinfo['grps'];
                             $_SESSION[DOKU_COOKIE]['auth']['info']['user'] = $remoteUser;
                             $_SESSION[DOKU_COOKIE]['auth']['user'] = $remoteUser;
+        $this->cando['logout'] = false;  // not possible as long as certificate is provided
         return true;
     }
 
