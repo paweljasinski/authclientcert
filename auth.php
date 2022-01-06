@@ -28,7 +28,7 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         $this->cando['modGroups']   = true;  // can groups be changed?
         $this->cando['getGroups']   = true;  // can a list of available groups be retrieved?
         $this->cando['external']    = true;  // does the module do external auth checking?
-        $this->cando['logout']      = true;  // possible for user logged in with password
+        $this->cando['logout']      = true;  // not possible as long as certificate is provided
     }
 
     /**
@@ -56,7 +56,7 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
             return false;
         }
         $certUserInfo = $this->_extractUserInfoFromCert($cert);
-        msg(print_r($certUserInfo, true));
+        // msg(print_r($certUserInfo, true));
         if (empty($certUserInfo)) {
             return false;
         }
@@ -71,7 +71,8 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         $USERINFO['grps'] = $_SESSION[DOKU_COOKIE]['auth']['info']['grps'] = $userinfo['grps'];
                             $_SESSION[DOKU_COOKIE]['auth']['info']['user'] = $remoteUser;
                             $_SESSION[DOKU_COOKIE]['auth']['user'] = $remoteUser;
-        $this->cando['logout'] = false;  // not possible as long as certificate is provided
+
+        $this->cando['logout'] = false;
         return true;
     }
 
@@ -132,7 +133,6 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         $employee_number = $this->_getOID("2.16.840.1.113730.3.1.3", $cert_name);
         if (empty($employee_number)) {
             $this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing user name (employee number)", 0, __LINE__, __FILE__);
-            return false;
         }
         // go after email address in extension.subjectAltName
         // [extensions] => Array ( [subjectAltName] => email:Pawel.Jasinski@vtg.admin.ch, othername:  ...<snip/>
@@ -147,9 +147,15 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         }
         if (empty($mail)) {
             $this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing email address", 0, __LINE__, __FILE__);
+        }
+        if (empty($employee_number) and empty($mail)) {
             return false;
         }
-        $user = $this->cleanUser($employee_number);
+        if (empty($employee_number)) {
+            $user = "U" . md5($mail);
+        } else {
+            $user = $this->cleanUser($employee_number);
+        }
         return ['name' => $name, 'mail' => $mail, 'user' => $user ];
     }
 
@@ -177,4 +183,3 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
         $this->_debug($message." ".$client_cert_data.$cert_dump, $err, $line, $file);
     }
 }
-
