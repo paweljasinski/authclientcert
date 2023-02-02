@@ -50,10 +50,14 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
             $this->_debug("CLIENT CERT: http_header_name is empty", 0, __LINE__, __FILE__);
             return false;
         }
-        $cert = $_SERVER[$header_name];
-        if (empty($cert)) {
-            $this->_debug("CLIENT CERT: missing http header ($header_name)", 0, __LINE__, __FILE__);
-            return false;
+        if ( $header_name <> "WEBSRV" ) {
+            $cert = $_SERVER[$header_name];
+            if (empty($cert)) {
+                $this->_debug("CLIENT CERT: missing http header ($header_name)", 0, __LINE__, __FILE__);
+                return false;
+            }
+        } else {
+            $cert = $header_name;
         }
         $certUserInfo = $this->_extractUserInfoFromCert($cert);
         // msg(print_r($certUserInfo, true));
@@ -107,46 +111,76 @@ class auth_plugin_authclientcert extends auth_plugin_authplain
     }
 
     protected function _extractUserInfoFromCert($cert) {
-        $cert = $this->_formatCert($cert);
-        if (empty($cert)) {
-            $this->_debug("CLIENT CERT: unable to locate user certificate", 0, __LINE__, __FILE__);
-            return false;
-        }
-        $_SESSION['SSL_CLIENT_CERT'] = $cert;
-        $client_cert_data = openssl_x509_parse($cert);
-        if (empty($client_cert_data)) {
-            $this->_debug("CLIENT CERT: unable to parse user certificate $client_cert_data", 0, __LINE__, __FILE__);
-            return false;
+        $header_name = $cert;
+        if ( $header_name <> "WEBSRV" ) {
+            $cert = $this->_formatCert($cert);
+            if (empty($cert)) {
+                $this->_debug("CLIENT CERT: unable to locate user certificate", 0, __LINE__, __FILE__);
+                return false;
+            }
+            }
+        if ( $header_name <> "WEBSRV" ) {
+            $_SESSION['SSL_CLIENT_CERT'] = $cert;
+            $client_cert_data = openssl_x509_parse($cert);
+            if (empty($client_cert_data)) {
+                $this->_debug("CLIENT CERT: unable to parse user certificate $client_cert_data", 0, __LINE__, __FILE__);
+                return false;
+            }
         }
 
         // this could be anything like: givenName sn, sn givenName, uid, ...
         // [subject] => Array ( [C] => CH [O] => Admin [OU] => Array ( [0] => VBS [1] => V ) [UNDEF] => E1024143 [CN] => Pawel Jasinski )
-        $name = $client_cert_data['subject']['CN'];
+        $source_array = null;
+        $source_array = $this->getConf('fullname_var');
+        if ( $header_name == "WEBSRV" ) {
+            $name = trim($_SERVER[$source_array]);
+        } else {
+            [$val1, $val2] = explode(',', $source_array);
+            $name = $client_cert_data[trim($val1)][trim($val2)];
+        }
         if (empty($name)) {
-            $this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing subject.CN", 0, __LINE__, __FILE__);
+            $this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing $source_array", 0, __LINE__, __FILE__);
             return false;
         }
 
         // go after 2.16.840.1.113730.3.1.3 - employeeNumber
         // [name] => /C=CH/O=Admin/OU=VBS/OU=V/2.16.840.1.113730.3.1.3=E1024143/CN=Pawel Jasinski
         $cert_name = $client_cert_data['name'];
-        $employee_number = $this->_getOID("2.16.840.1.113730.3.1.3", $cert_name);
-        if (empty($employee_number)) {
-            $this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing user name (employee number)", 0, __LINE__, __FILE__);
+        $source_array = null;
+        $source_array = $this->getConf('name_var');
+        if ( str_word_count($source_array, 0, "_") == 2 ) {
+            [$val1, $val2] = explode(',', $source_array);
+            $employee_number = $client_cert_data[trim($val1)][trim($val2)];
+        } elseif ( $header_name == "WEBSRV" ) {
+            $employee_number = trim($_SERVER[$source_array]);
+        } else {
+           $employee_number = $this->_getOID($source_array, $cert_name);
         }
+        if (empty($employee_number)) {
+            $this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing user name ($source_array)", 0, __LINE__, __FILE__);
+        }
+
         // go after email address in extension.subjectAltName
         // [extensions] => Array ( [subjectAltName] => email:Pawel.Jasinski@vtg.admin.ch, othername:  ...<snip/>
-        $altName = $client_cert_data['extensions']['subjectAltName'];
-        $mail = null;
-        foreach (explode(",", $altName) as $part) {
-            $nameval = explode(":", $part, 2);
-            if (count($nameval) == 2 && $nameval[0] == "email") {
-                $mail = trim($nameval[1]);
-                break;
+        $source_array = null;
+        $source_array = $this->getConf('email_var');
+        if ( str_word_count($source_array, 0, "_") == 1 ) {
+            $mail = trim($_SERVER[$source_array]);
+        } else {
+            [$val1, $val2, $val3] = explode(',', $source_array);
+            $altName = $client_cert_data[trim($val1)][trim($val2)];
+            $mail = null;
+            foreach (explode(",", $altName) as $part) {
+                $nameval = explode(":", $part, 2);
+                if (count($nameval) == 2 and $nameval[0] == trim($val3)) {
+                    $mail = trim($nameval[1]);
+                    break;
+                }
             }
         }
+
         if (empty($mail)) {
-            $this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing email address", 0, __LINE__, __FILE__);
+            $this->_debugCert($client_cert_data, "CLIENT CERT: user certificate is missing email $mail  address ", 0, __LINE__, __FILE__);
         }
         if (empty($employee_number) and empty($mail)) {
             return false;
