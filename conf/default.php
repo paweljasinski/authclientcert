@@ -11,4 +11,3 @@ $conf['fullname_var'] = 'subject, CN';
 $conf['email_var'] = 'extensions, subjectAltName, email';
 $conf['group'] = 'smartcarduser';
 $conf['debug'] = 0;
-
